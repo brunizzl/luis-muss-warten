@@ -65,9 +65,44 @@ fn reason_message_is_bad(msg: &str) -> Option<&str> {
     if msg.chars().filter(|c| !c.is_alphanumeric()).count() < 2 {
         return Some("Zu wenig Sonderzeichen");
     }
+    enum Shape {
+        Upper,
+        Lower,
+        Other,
+    }
+    let mut last = Shape::Other;
+    let mut streak = 0;
+    for c in msg.chars() {
+        if c.is_uppercase() {
+            if matches!(last, Shape::Upper) {
+                streak += 1;
+            } else {
+                streak = 1;
+            }
+            last = Shape::Upper;
+        } else if c.is_lowercase() {
+            if matches!(last, Shape::Lower) {
+                streak += 1;
+            } else {
+                streak = 1;
+            }
+            last = Shape::Lower;
+        } else {
+            last = Shape::Other;
+            streak = 0;
+        }
+
+        if streak > 2 {
+            return Some(if matches!(last, Shape::Upper) {
+                "Zu viele Großbuchstaben hintereinander"
+            } else {
+                "Zu viele Kleinbuchstaben hintereinander"
+            });
+        }
+    }
 
     None
-} 
+}
 
 impl TemplateApp {
     /// Called once before the first frame.
@@ -96,7 +131,6 @@ impl eframe::App for TemplateApp {
         // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
 
-
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
 
@@ -104,7 +138,7 @@ impl eframe::App for TemplateApp {
                 egui::widgets::global_dark_light_mode_buttons(ui);
                 ui.label("     Zoom: ");
                 ui.add(egui::DragValue::new(&mut self.scale).clamp_range(0.2..=2.0));
-            });            
+            });
             ctx.set_pixels_per_point(self.scale * 3.0);
         });
 
@@ -115,15 +149,14 @@ impl eframe::App for TemplateApp {
             let diff = now.duration_since(self.start_time);
             let waiting_time = Duration::from_secs((self.waiting_time * 60.0) as u64);
             self.done_waiting |= diff > waiting_time;
-            
+
             if !self.done_waiting {
                 ui.horizontal(|ui| {
                     ui.add(egui::widgets::Spinner::new());
                     let time_left = waiting_time - diff;
-                    ui.label(format!(
-                        "Luis muss noch {} Sekunden warten. ☕",
-                        time_left.as_secs() + 1
-                    ));
+                    let nr_secs = time_left.as_secs() + 1;
+                    let secs = if nr_secs != 1 { "Sekunden" } else { "Sekunde" };
+                    ui.label(format!("Luis muss noch {} {} warten. ☕", nr_secs, secs));
                 });
                 ui.add_space(20.0);
             }
@@ -160,7 +193,7 @@ impl eframe::App for TemplateApp {
 
             if self.done_waiting && self.done_typing {
                 ui.label("Luis muss nicht mehr warten und nicht mehr tippen. 🎉  🎊  🎆  🎇");
-                
+
                 ui.add_space(50.0);
 
                 ui.horizontal(|ui| {
@@ -173,24 +206,37 @@ impl eframe::App for TemplateApp {
                     ui.label("Passwort ändern: ");
                     ui.text_edit_singleline(&mut self.new_message);
                     if let Some(err) = reason_message_is_bad(&self.new_message) {
-                        if self.new_message.len() > 0 {
-                            let warning = egui::RichText::new(err).color(egui::Color32::RED).strong();
+                        if !self.new_message.is_empty() {
+                            let warning =
+                                egui::RichText::new(err).color(egui::Color32::RED).strong();
                             ui.label(warning);
+                            ui.menu_button("？", |ui| {
+                                let text = r#"Das Passwort besteht aus:
+ - mindestens 10 Zeichen
+ - davon mindestens zwei:
+    - Großbuchstaben
+    - Kleinbuchstaben
+    - Ziffern
+    - Sonderzeichen
+ - mit nicht mehr als zwei Groß-/
+   Kleinbuchstaben hintereinander."#;
+                                let rich = egui::RichText::new(text).size(8.0);
+                                ui.add(egui::Label::new(rich).wrap(false));
+                            });
                         }
-                    }
-                    else if ui.button("Übernehmen").clicked() {
+                    } else if ui.button("Übernehmen").clicked() {
                         self.hidden_message.clone_from(&self.new_message);
                     }
                 });
 
                 ui.add_space(20.0);
                 ui.add(
-                    egui::Slider::new(&mut self.waiting_time, 0.1..=15.0)
+                    egui::Slider::new(&mut self.waiting_time, 1.0..=15.0)
                         .text("Wartezeit in der Zukunft (min)"),
                 );
                 ui.add_space(20.0);
                 ui.add(
-                    egui::Slider::new(&mut self.characters_to_type, 5..=250)
+                    egui::Slider::new(&mut self.characters_to_type, 30..=250)
                         .text("Anzahl Buchstaben in der Zukunft"),
                 );
             }
