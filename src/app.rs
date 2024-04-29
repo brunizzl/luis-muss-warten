@@ -134,6 +134,11 @@ impl eframe::App for LuisApp {
                 egui::widgets::global_dark_light_mode_buttons(ui);
                 ui.label("     Zoom: ");
                 ui.add(egui::DragValue::new(&mut self.scale).clamp_range(0.2..=2.0));
+                if !self.done_typing || !self.done_waiting {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                        ui.add(egui::widgets::Spinner::new())
+                    });
+                }
             });
             ctx.set_pixels_per_point(self.scale * 3.0);
         });
@@ -147,13 +152,10 @@ impl eframe::App for LuisApp {
             self.done_waiting |= diff > waiting_time;
 
             if !self.done_waiting {
-                ui.horizontal(|ui| {
-                    ui.add(egui::widgets::Spinner::new());
-                    let time_left = waiting_time - diff;
-                    let nr_secs = time_left.as_secs() + 1;
-                    let secs = if nr_secs != 1 { "Sekunden" } else { "Sekunde" };
-                    ui.label(format!("Luis muss noch {} {} warten. ☕", nr_secs, secs));
-                });
+                let time_left = waiting_time - diff;
+                let nr_secs = time_left.as_secs() + 1;
+                let secs = if nr_secs != 1 { "Sekunden" } else { "Sekunde" };
+                ui.label(format!("Luis muss noch {} {} warten. ☕", nr_secs, secs));
                 ui.add_space(20.0);
             }
 
@@ -170,7 +172,7 @@ impl eframe::App for LuisApp {
                 if !self.done_typing {
                     let nr_left = self.characters_to_type - self.characters_typed;
                     ui.label(format!(
-                        "Luis muss noch {} Buchstaben tippen. 🖮  Nächster: {}",
+                        "Luis muss noch {} Buchstaben tippen. 🖮       Nächster: {}",
                         nr_left,
                         key.symbol_or_name()
                     ));
@@ -203,9 +205,6 @@ impl eframe::App for LuisApp {
                     ui.text_edit_singleline(&mut self.new_message);
                     if let Some(err) = reason_message_is_bad(&self.new_message) {
                         if !self.new_message.is_empty() {
-                            let warning =
-                                egui::RichText::new(err).color(egui::Color32::RED).strong();
-                            ui.label(warning);
                             ui.menu_button("？", |ui| {
                                 let text = r#"Das Passwort benötigt:
  - mindestens 10 Zeichen
@@ -219,6 +218,9 @@ impl eframe::App for LuisApp {
                                 let rich = egui::RichText::new(text).size(8.0);
                                 ui.add(egui::Label::new(rich).wrap(false));
                             });
+                            let warning =
+                                egui::RichText::new(err).color(egui::Color32::RED).strong();
+                            ui.label(warning);
                         }
                     } else if ui.button("Übernehmen").clicked() {
                         self.hidden_message.clone_from(&self.new_message);
@@ -241,7 +243,7 @@ impl eframe::App for LuisApp {
                 ui.horizontal(|ui| {
                     ui.label("                ");
                     let text = egui::RichText::new("😤").size(30.0);
-                    if ui.button(text).clicked() {
+                    if ui.button(text).on_hover_text("Huraaa!").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
