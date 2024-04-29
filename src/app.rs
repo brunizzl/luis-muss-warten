@@ -1,3 +1,4 @@
+use egui::Label;
 use rand::{rngs::ThreadRng, Rng};
 use std::time::{Duration, Instant};
 
@@ -5,7 +6,7 @@ use std::time::{Duration, Instant};
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct LuisApp {
-    scale: f32,
+    zoom: f32,
 
     hidden_message: String,
     #[serde(skip)]
@@ -17,21 +18,21 @@ pub struct LuisApp {
     #[serde(skip)]
     done_waiting: bool,
 
-    characters_to_type: usize,
+    nr_chars_to_type: usize,
     #[serde(skip)]
-    characters_typed: usize,
+    nr_chars_typed: usize,
     #[serde(skip)]
-    curr_character_to_type: Option<egui::Key>,
+    char_to_type: egui::Key,
     #[serde(skip)]
     done_typing: bool,
     #[serde(skip)]
-    char_generator: ThreadRng,
+    rng: ThreadRng,
 }
 
 impl Default for LuisApp {
     fn default() -> Self {
-        Self {
-            scale: 1.0,
+        let mut res = Self {
+            zoom: 1.0,
 
             hidden_message: "SupersicherPasswort123".to_owned(),
             new_message: String::new(),
@@ -40,12 +41,14 @@ impl Default for LuisApp {
             waiting_time: 1.0,
             done_waiting: false,
 
-            characters_to_type: 30,
-            characters_typed: 0,
-            curr_character_to_type: None,
+            nr_chars_to_type: 30,
+            nr_chars_typed: 0,
+            char_to_type: egui::Key::Space,
             done_typing: false,
-            char_generator: rand::thread_rng(),
-        }
+            rng: rand::thread_rng(),
+        };
+        res.change_char_to_type();
+        res
     }
 }
 
@@ -114,6 +117,22 @@ impl LuisApp {
 
         Default::default()
     }
+
+    fn change_char_to_type(&mut self) {
+        const LEN: usize = 26;
+        use egui::Key::*;
+        const KEYS: [egui::Key; LEN] = [
+            A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+        ];
+        loop {
+            let index: usize = self.rng.gen_range(0..LEN);
+            let ch = KEYS[index];
+            if ch != self.char_to_type {
+                self.char_to_type = ch;
+                return;
+            }
+        }
+    }
 }
 
 impl eframe::App for LuisApp {
@@ -133,14 +152,14 @@ impl eframe::App for LuisApp {
             ui.horizontal(|ui| {
                 egui::widgets::global_dark_light_mode_buttons(ui);
                 ui.label("     Zoom: ");
-                ui.add(egui::DragValue::new(&mut self.scale).clamp_range(0.2..=2.0));
-                if !self.done_typing || !self.done_waiting {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                        ui.add(egui::widgets::Spinner::new())
-                    });
-                }
+                ui.add(
+                    egui::DragValue::new(&mut self.zoom)
+                        .clamp_range(0.2..=2.0)
+                        .fixed_decimals(1)
+                        .update_while_editing(false),
+                );
             });
-            ctx.set_pixels_per_point(self.scale * 3.0);
+            ctx.set_pixels_per_point(self.zoom * 3.0);
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -152,6 +171,7 @@ impl eframe::App for LuisApp {
             self.done_waiting |= diff > waiting_time;
 
             if !self.done_waiting {
+                ctx.request_repaint_after(Duration::from_millis(100));
                 let time_left = waiting_time - diff;
                 let nr_secs = time_left.as_secs() + 1;
                 let secs = if nr_secs != 1 { "Sekunden" } else { "Sekunde" };
@@ -159,38 +179,27 @@ impl eframe::App for LuisApp {
                 ui.add_space(20.0);
             }
 
-            if self.curr_character_to_type.is_none() {
-                const LEN: usize = 26;
-                use egui::Key::*;
-                const KEYS: [egui::Key; LEN] = [
-                    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-                ];
-                let index: usize = self.char_generator.gen_range(0..LEN);
-                self.curr_character_to_type = Some(KEYS[index]);
+            if !self.done_typing {
+                let nr_left = self.nr_chars_to_type - self.nr_chars_typed;
+                ui.label(format!(
+                    "Luis muss noch {} Buchstaben tippen. 🖮       Nächster:  {}",
+                    nr_left,
+                    self.char_to_type.symbol_or_name()
+                ));
             }
-            if let Some(key) = self.curr_character_to_type {
-                if !self.done_typing {
-                    let nr_left = self.characters_to_type - self.characters_typed;
-                    ui.label(format!(
-                        "Luis muss noch {} Buchstaben tippen. 🖮       Nächster: {}",
-                        nr_left,
-                        key.symbol_or_name()
-                    ));
-                }
 
-                ui.input(|info| {
-                    if info.key_pressed(key) {
-                        self.characters_typed += 1;
-                        self.curr_character_to_type = None;
-                        if self.characters_typed >= self.characters_to_type {
-                            self.done_typing = true;
-                        }
+            ui.input(|info| {
+                if info.key_pressed(self.char_to_type) {
+                    self.nr_chars_typed += 1;
+                    self.change_char_to_type();
+                    if self.nr_chars_typed >= self.nr_chars_to_type {
+                        self.done_typing = true;
                     }
-                });
-            }
+                }
+            });
 
             if self.done_waiting && self.done_typing {
-                ui.label("Luis muss nicht mehr warten und nicht mehr tippen. 🎉  🎊  🎆  🎇");
+                ui.label("Luis muss nicht mehr warten und nicht mehr tippen! 🎉  🎊  🎆  🎇");
 
                 ui.add_space(50.0);
 
@@ -205,17 +214,17 @@ impl eframe::App for LuisApp {
                     ui.text_edit_singleline(&mut self.new_message);
                     if let Some(err) = reason_message_is_bad(&self.new_message) {
                         if !self.new_message.is_empty() {
-                            ui.menu_button("？", |ui| {
+                            ui.button("？").on_hover_ui(|ui| {
                                 let text = r#"Das Passwort benötigt:
- - mindestens 10 Zeichen
- - davon mindestens zwei:
-    - Großbuchstaben
-    - Kleinbuchstaben
-    - Ziffern
-    - Sonderzeichen
- - mit nicht mehr als zwei Groß-/
-   Kleinbuchstaben hintereinander."#;
-                                let rich = egui::RichText::new(text).size(8.0);
+- mindestens 10 Zeichen
+- davon mindestens zwei:
+   - Großbuchstaben
+   - Kleinbuchstaben
+   - Ziffern
+   - Sonderzeichen
+- mit nicht mehr als zwei Groß-/
+  Kleinbuchstaben hintereinander."#;
+                                let rich = egui::RichText::new(text).size(8.5);
                                 ui.add(egui::Label::new(rich).wrap(false));
                             });
                             let warning =
@@ -230,23 +239,27 @@ impl eframe::App for LuisApp {
                 ui.add_space(20.0);
                 ui.add(
                     egui::Slider::new(&mut self.waiting_time, 1.0..=15.0)
-                        .text("Wartezeit in der Zukunft (min)"),
+                        .text("Wartezeit in der Zukunft (in Minuten)"),
                 );
                 ui.add_space(20.0);
                 ui.add(
-                    egui::Slider::new(&mut self.characters_to_type, 30..=250)
+                    egui::Slider::new(&mut self.nr_chars_to_type, 30..=250)
                         .text("Anzahl Buchstaben in der Zukunft"),
                 );
             } else {
                 ui.add_space(50.0);
                 ui.label("Stattdessen produktiv sein: ");
                 ui.horizontal(|ui| {
-                    ui.label("                ");
+                    ui.add(Label::new("                ").selectable(false));
                     let text = egui::RichText::new("😤").size(30.0);
                     if ui.button(text).on_hover_text("Huraaa!").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
+
+                ui.add_space(20.0);
+                ui.add(Label::new("   "))
+                    .on_hover_text("Grüße von Bruno 🙋");
             }
         });
     }
