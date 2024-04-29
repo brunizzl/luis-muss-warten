@@ -1,20 +1,24 @@
+use std::time::{Duration, Instant};
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    // Example stuff:
-    label: String,
-
-    #[serde(skip)] // This how you opt-out of serialization of a field
-    value: f32,
+    #[serde(skip)]
+    start_time: Instant,
+    hidden_message: String,
+    waiting_time: f32,
+    #[serde(skip)]
+    done_waiting: bool,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            start_time: Instant::now(),
+            hidden_message: "SupersicherPasswort123".to_owned(),
+            waiting_time: 2.7,
+            done_waiting: false,
         }
     }
 }
@@ -49,47 +53,40 @@ impl eframe::App for TemplateApp {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
 
-            egui::menu::bar(ui, |ui| {
-                // NOTE: no File->Quit on web pages!
-                let is_web = cfg!(target_arch = "wasm32");
-                if !is_web {
-                    ui.menu_button("File", |ui| {
-                        if ui.button("Quit").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                    });
-                    ui.add_space(16.0);
-                }
-
-                egui::widgets::global_dark_light_mode_buttons(ui);
-            });
+            egui::widgets::global_dark_light_mode_buttons(ui);
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("eframe template");
 
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
-            });
+            let now = Instant::now();
+            let diff = now.duration_since(self.start_time);
+            let waiting_time = Duration::from_secs((self.waiting_time * 60.0) as u64);
+            self.done_waiting |= diff > waiting_time;
 
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
+            if self.done_waiting {
+                ui.heading(format!("Luis muss nicht mehr warten :)"));
+                ui.horizontal(|ui| {
+                    ui.label("Hier bitte: ");
+                    ui.text_edit_singleline(&mut self.hidden_message);
+                });
+
+                ui.add(
+                    egui::Slider::new(&mut self.waiting_time, 1.0..=15.0)
+                        .text("Wartezeit für Zukunft (min)"),
+                );
+            } else {
+                ui.horizontal(|ui| {
+                    ui.add(egui::widgets::Spinner::new());
+                    let time_left = waiting_time - diff;
+                    ui.heading(format!(
+                        "Luis muss noch warten (für {} Sekunden)",
+                        time_left.as_secs() + 1
+                    ));
+                });
             }
 
             ui.separator();
-
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/main/",
-                "Source code."
-            ));
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
-                egui::warn_if_debug_build(ui);
-            });
         });
     }
 }
