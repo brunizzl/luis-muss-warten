@@ -43,6 +43,9 @@ opt-level = 2
 
 [patch.crates-io]
 
+[build-dependencies]
+winres = "0.1.12"
+
 # If you want to use the bleeding edge version of egui and eframe:
 # egui = { git = "https://github.com/emilk/egui", branch = "master" }
 # eframe = { git = "https://github.com/emilk/egui", branch = "master" }
