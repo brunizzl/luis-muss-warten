@@ -7,16 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'eframe_template'",
+            "name": "Debug unit tests in library 'luis-muss-warten'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=eframe_template"
+                    "--package=luis-muss-warten"
                 ],
                 "filter": {
-                    "name": "eframe_template",
+                    "name": "luis-muss-warten",
                     "kind": "lib"
                 }
             },
@@ -26,15 +26,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'eframe_template'",
+            "name": "Debug executable 'luis-muss-warten'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=eframe_template",
-                    "--package=eframe_template"
+                    "--bin=luis-muss-warten",
+                    "--package=luis-muss-warten"
                 ],
                 "filter": {
-                    "name": "eframe_template",
+                    "name": "luis-muss-warten",
                     "kind": "bin"
                 }
             },
@@ -44,16 +44,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'eframe_template'",
+            "name": "Debug unit tests in executable 'luis-muss-warten'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=eframe_template",
-                    "--package=eframe_template"
+                    "--bin=luis-muss-warten",
+                    "--package=luis-muss-warten"
                 ],
                 "filter": {
-                    "name": "eframe_template",
+                    "name": "luis-muss-warten",
                     "kind": "bin"
                 }
             },

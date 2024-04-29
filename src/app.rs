@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
+pub struct LuisApp {
     scale: f32,
 
     hidden_message: String,
@@ -28,10 +28,10 @@ pub struct TemplateApp {
     char_generator: ThreadRng,
 }
 
-impl Default for TemplateApp {
+impl Default for LuisApp {
     fn default() -> Self {
         Self {
-            scale: 3.0,
+            scale: 1.0,
 
             hidden_message: "SupersicherPasswort123".to_owned(),
             new_message: String::new(),
@@ -40,7 +40,7 @@ impl Default for TemplateApp {
             waiting_time: 1.0,
             done_waiting: false,
 
-            characters_to_type: 20,
+            characters_to_type: 30,
             characters_typed: 0,
             curr_character_to_type: None,
             done_typing: false,
@@ -93,18 +93,14 @@ fn reason_message_is_bad(msg: &str) -> Option<&str> {
         }
 
         if streak > 2 {
-            return Some(if matches!(last, Shape::Upper) {
-                "Zu viele Großbuchstaben hintereinander"
-            } else {
-                "Zu viele Kleinbuchstaben hintereinander"
-            });
+            return Some("Zu wenig Varianz");
         }
     }
 
     None
 }
 
-impl TemplateApp {
+impl LuisApp {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -120,7 +116,7 @@ impl TemplateApp {
     }
 }
 
-impl eframe::App for TemplateApp {
+impl eframe::App for LuisApp {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
@@ -211,7 +207,7 @@ impl eframe::App for TemplateApp {
                                 egui::RichText::new(err).color(egui::Color32::RED).strong();
                             ui.label(warning);
                             ui.menu_button("？", |ui| {
-                                let text = r#"Das Passwort besteht aus:
+                                let text = r#"Das Passwort benötigt:
  - mindestens 10 Zeichen
  - davon mindestens zwei:
     - Großbuchstaben
@@ -239,6 +235,16 @@ impl eframe::App for TemplateApp {
                     egui::Slider::new(&mut self.characters_to_type, 30..=250)
                         .text("Anzahl Buchstaben in der Zukunft"),
                 );
+            } else {
+                ui.add_space(50.0);
+                ui.label("Stattdessen produktiv sein: ");
+                ui.horizontal(|ui| {
+                    ui.label("                ");
+                    let text = egui::RichText::new("😤").size(30.0);
+                    if ui.button(text).clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
             }
         });
     }
