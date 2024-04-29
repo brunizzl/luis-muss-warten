@@ -12,39 +12,39 @@ pub struct LuisApp {
     #[serde(skip)]
     new_message: String,
 
-    #[serde(skip)]
-    start_time: Instant,
-    waiting_time: f32,
-    #[serde(skip)]
-    done_waiting: bool,
+    specified_minutes_typing: f32,
+    time_can_reverse: bool,
 
-    nr_chars_to_type: usize,
     #[serde(skip)]
-    nr_chars_typed: usize,
+    time_left: Duration,
+    #[serde(skip)]
+    last_typed: Instant,
+    #[serde(skip)]
+    last_frame: Instant,
+
     #[serde(skip)]
     char_to_type: egui::Key,
-    #[serde(skip)]
-    done_typing: bool,
     #[serde(skip)]
     rng: ThreadRng,
 }
 
 impl Default for LuisApp {
     fn default() -> Self {
+        let now = Instant::now();
         let mut res = Self {
             zoom: 1.0,
 
             hidden_message: "SupersicherPasswort123".to_owned(),
             new_message: String::new(),
 
-            start_time: Instant::now(),
-            waiting_time: 1.0,
-            done_waiting: false,
+            specified_minutes_typing: 1.0,
+            time_can_reverse: false,
 
-            nr_chars_to_type: 30,
-            nr_chars_typed: 0,
+            time_left: Duration::from_secs(6000000),
+            last_typed: now,
+            last_frame: now,
+
             char_to_type: egui::Key::Space,
-            done_typing: false,
             rng: rand::thread_rng(),
         };
         res.change_char_to_type();
@@ -165,44 +165,47 @@ impl eframe::App for LuisApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
 
-            let now = Instant::now();
-            let diff = now.duration_since(self.start_time);
-            let waiting_time = Duration::from_secs((self.waiting_time * 60.0) as u64);
-            self.done_waiting |= diff > waiting_time;
+            if !self.time_left.is_zero() {
+                let now = Instant::now();
+                let frame_diff = now - self.last_frame;
+                self.last_frame = now;
 
-            if !self.done_waiting {
+                let dur_since_typed = now - self.last_typed;
+                if dur_since_typed < Duration::from_secs(3) {
+                    self.time_left = self.time_left.saturating_sub(frame_diff);
+                } else if dur_since_typed > Duration::from_secs(10) && self.time_can_reverse {
+                    self.time_left += frame_diff;
+                }
+
+                let max_time = Duration::from_secs_f32(self.specified_minutes_typing * 60.0);
+                if self.time_left > max_time {
+                    self.time_left = max_time;
+                }
+
                 ctx.request_repaint_after(Duration::from_millis(100));
-                let time_left = waiting_time - diff;
-                let nr_secs = time_left.as_secs() + 1;
-                let secs = if nr_secs != 1 { "Sekunden" } else { "Sekunde" };
-                ui.label(format!("Luis muss noch {} {} warten. ☕", nr_secs, secs));
-                ui.add_space(20.0);
-            }
-
-            if !self.done_typing {
-                let nr_left = self.nr_chars_to_type - self.nr_chars_typed;
+                let nr_secs = self.time_left.as_secs_f32().ceil();
+                let secs = if nr_secs != 1.0 {
+                    "Sekunden"
+                } else {
+                    "Sekunde"
+                };
+                ui.label(format!("Luis muss noch {} {} tippen. 🖮", nr_secs, secs));
+                ui.add_space(5.0);
                 ui.label(format!(
-                    "Luis muss noch {} Buchstaben tippen. 🖮       Nächster:  {}",
-                    nr_left,
+                    "Nächster Buchstabe:  {}",
                     self.char_to_type.symbol_or_name()
                 ));
-            }
 
-            ui.input(|info| {
-                if info.key_pressed(self.char_to_type) {
-                    self.nr_chars_typed += 1;
-                    self.change_char_to_type();
-                    if self.nr_chars_typed >= self.nr_chars_to_type {
-                        self.done_typing = true;
+                ui.input(|info| {
+                    if info.key_pressed(self.char_to_type) {
+                        self.change_char_to_type();
+                        self.last_typed = now;
                     }
-                }
-            });
-
-            if self.done_waiting && self.done_typing {
-                ui.label("Luis muss nicht mehr warten und nicht mehr tippen! 🎉  🎊  🎆  🎇");
+                });
+            } else {
+                ui.label("Luis muss nicht mehr tippen! 🎉  🎊  🎆  🎇");
 
                 ui.add_space(50.0);
-
                 ui.horizontal(|ui| {
                     ui.label("Hier bitte: ");
                     ui.add(egui::Label::new(&self.hidden_message).selectable(false));
@@ -238,15 +241,22 @@ impl eframe::App for LuisApp {
 
                 ui.add_space(20.0);
                 ui.add(
-                    egui::Slider::new(&mut self.waiting_time, 1.0..=15.0)
-                        .text("Wartezeit in der Zukunft (in Minuten)"),
+                    egui::Slider::new(&mut self.specified_minutes_typing, 1.0..=15.0)
+                        .text("Tippzeit in Zukunft (in Minuten)"),
                 );
+
                 ui.add_space(20.0);
-                ui.add(
-                    egui::Slider::new(&mut self.nr_chars_to_type, 30..=250)
-                        .text("Anzahl Buchstaben in der Zukunft"),
+                ui.add(egui::Checkbox::new(
+                    &mut self.time_can_reverse,
+                    "Zeit kann rückwärts laufen",
+                ))
+                .on_hover_text(
+                    "Wenn 10 Sekunden nicht der richtige Buchstabe getippt \
+                     wurde, wird die Restdauer wieder größer.",
                 );
-            } else {
+            }
+
+            if !self.time_left.is_zero() {
                 ui.add_space(50.0);
                 ui.label("Stattdessen produktiv sein: ");
                 ui.horizontal(|ui| {
@@ -256,8 +266,7 @@ impl eframe::App for LuisApp {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
-
-                ui.add_space(20.0);
+                ui.add_space(10.0);
                 ui.add(Label::new("   "))
                     .on_hover_text("Grüße von Bruno 🙋");
             }
