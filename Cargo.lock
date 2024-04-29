@@ -875,6 +875,7 @@ dependencies = [
  "egui",
  "env_logger",
  "log",
+ "rand",
  "serde",
  "wasm-bindgen-futures",
 ]
