@@ -68,6 +68,7 @@ fn reason_message_is_bad(msg: &str) -> Option<&str> {
     if msg.chars().filter(|c| !c.is_alphanumeric()).count() < 2 {
         return Some("Zu wenig Sonderzeichen");
     }
+    #[derive(PartialEq, Eq)]
     enum Shape {
         Upper,
         Lower,
@@ -76,28 +77,24 @@ fn reason_message_is_bad(msg: &str) -> Option<&str> {
     let mut last = Shape::Other;
     let mut streak = 0;
     for c in msg.chars() {
-        if c.is_uppercase() {
-            if matches!(last, Shape::Upper) {
-                streak += 1;
-            } else {
-                streak = 1;
-            }
-            last = Shape::Upper;
+        let curr = if c.is_uppercase() {
+            Shape::Upper
         } else if c.is_lowercase() {
-            if matches!(last, Shape::Lower) {
-                streak += 1;
-            } else {
-                streak = 1;
-            }
-            last = Shape::Lower;
+            Shape::Lower
         } else {
-            last = Shape::Other;
-            streak = 0;
-        }
+            Shape::Other
+        };
 
+        if curr != Shape::Other && curr == last {
+            streak += 1;
+        } else {
+            streak = 1;
+        }
         if streak > 2 {
             return Some("Zu wenig Varianz");
         }
+
+        last = curr;
     }
 
     None
