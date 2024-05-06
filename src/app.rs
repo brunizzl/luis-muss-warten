@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 pub struct LuisApp {
     zoom: f32,
 
+    #[serde(skip)]
     hidden_message: String,
     #[serde(skip)]
     new_message: String,
@@ -31,6 +32,12 @@ pub struct LuisApp {
 impl Default for LuisApp {
     fn default() -> Self {
         let now = Instant::now();
+        let mut rng = rand::thread_rng();
+        for _ in 0..50 {
+            //waste some values to get better start
+            rng.gen::<usize>();
+        }
+
         let mut res = Self {
             zoom: 1.0,
 
@@ -45,7 +52,7 @@ impl Default for LuisApp {
             last_frame: now,
 
             char_to_type: egui::Key::Space,
-            rng: rand::thread_rng(),
+            rng,
         };
         res.change_char_to_type();
         res
@@ -103,6 +110,8 @@ fn reason_message_is_bad(msg: &str) -> Option<&str> {
     None
 }
 
+const HIDDEN_MSG_KEY: &str = "app::hidden-message";
+
 impl LuisApp {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -112,7 +121,9 @@ impl LuisApp {
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+            let mut val: Self = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+            val.hidden_message = eframe::get_value(storage, HIDDEN_MSG_KEY).unwrap_or_default();
+            return val;
         }
 
         Default::default()
@@ -139,6 +150,7 @@ impl eframe::App for LuisApp {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
+        eframe::set_value(storage, HIDDEN_MSG_KEY, &self.hidden_message);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
