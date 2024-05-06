@@ -41,7 +41,7 @@ impl Default for LuisApp {
         let mut res = Self {
             zoom: 1.0,
 
-            hidden_message: "SupersicherPasswort123".to_owned(),
+            hidden_message: String::new(),
             new_message: String::new(),
 
             specified_minutes_typing: 1.0,
@@ -122,7 +122,8 @@ impl LuisApp {
         // Note that you must enable the `persistence` feature for this to work.
         if let Some(storage) = cc.storage {
             let mut val: Self = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-            val.hidden_message = eframe::get_value(storage, HIDDEN_MSG_KEY).unwrap_or_default();
+            val.hidden_message = eframe::get_value(storage, HIDDEN_MSG_KEY)
+                .unwrap_or_else(|| "SupersicherPasswort123".to_owned());
             return val;
         }
 
