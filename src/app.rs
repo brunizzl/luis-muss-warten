@@ -1,4 +1,4 @@
-use egui::Label;
+use egui::{Label, RichText};
 use rand::{rngs::ThreadRng, Rng};
 use std::time::{Duration, Instant};
 
@@ -14,6 +14,7 @@ pub struct LuisApp {
     new_message: String,
 
     specified_minutes_typing: f32,
+    seconds_delay_after_typing: f32,
     time_can_reverse: bool,
 
     #[serde(skip)]
@@ -45,10 +46,11 @@ impl Default for LuisApp {
             new_message: String::new(),
 
             specified_minutes_typing: 1.0,
+            seconds_delay_after_typing: 10.0,
             time_can_reverse: false,
 
             time_left: Duration::from_secs(6000000),
-            last_typed: now,
+            last_typed: now - Duration::from_secs(3600),
             last_frame: now,
 
             char_to_type: egui::Key::Space,
@@ -108,6 +110,12 @@ fn reason_message_is_bad(msg: &str) -> Option<&str> {
     }
 
     None
+}
+
+fn background_highlight(ui: &egui::Ui) -> egui::Color32 {
+    let is_dark = ui.ctx().style().visuals.dark_mode;
+    let val = if is_dark { 5 } else { 210 };
+    egui::Color32::from_rgb(val, val, val)
 }
 
 const HIDDEN_MSG_KEY: &str = "app::hidden-message";
@@ -184,9 +192,13 @@ impl eframe::App for LuisApp {
                 self.last_frame = now;
 
                 let dur_since_typed = now - self.last_typed;
-                if dur_since_typed < Duration::from_secs(3) {
+                let dur_clock_continues =
+                    Duration::from_secs_f32(f32::max(3.0, self.seconds_delay_after_typing));
+                if dur_since_typed < dur_clock_continues {
                     self.time_left = self.time_left.saturating_sub(frame_diff);
-                } else if dur_since_typed > Duration::from_secs(10) && self.time_can_reverse {
+                } else if dur_since_typed > Duration::from_secs(10) + dur_clock_continues
+                    && self.time_can_reverse
+                {
                     self.time_left += frame_diff;
                 }
 
@@ -204,19 +216,27 @@ impl eframe::App for LuisApp {
                 };
                 ui.label(format!("Luis muss noch {} {} tippen. 🖮", nr_secs, secs));
                 ui.add_space(5.0);
-                ui.label(format!(
-                    "Nächster Buchstabe:  {}",
-                    self.char_to_type.symbol_or_name()
-                ));
-
-                ui.input(|info| {
-                    if info.key_pressed(self.char_to_type) {
-                        self.change_char_to_type();
-                        self.last_typed = now;
-                    }
+                let show_next =
+                    dur_since_typed >= Duration::from_secs_f32(self.seconds_delay_after_typing);
+                if show_next {
+                    ui.input(|info| {
+                        if info.key_pressed(self.char_to_type) {
+                            self.change_char_to_type();
+                            self.last_typed = now;
+                        }
+                    });
+                }
+                ui.add_visible_ui(show_next, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Nächster Buchstabe: ");
+                        let bg = background_highlight(ui);
+                        let key_str = self.char_to_type.symbol_or_name();
+                        let key = RichText::new(key_str).background_color(bg);
+                        ui.add(Label::new(key));
+                    });
                 });
             } else {
-                ui.label("Luis muss nicht mehr tippen! 🎉  🎊  🎆  🎇");
+                ui.label("Luis hat sich entschieden nicht produktiv zu sein. 😖");
 
                 ui.add_space(50.0);
                 ui.horizontal(|ui| {
@@ -256,6 +276,16 @@ impl eframe::App for LuisApp {
                 ui.add(
                     egui::Slider::new(&mut self.specified_minutes_typing, 1.0..=15.0)
                         .text("Tippzeit in Zukunft (in Minuten)"),
+                );
+
+                ui.add_space(20.0);
+                let max_wait = self.specified_minutes_typing * 60.0 * 0.25;
+                if self.seconds_delay_after_typing > max_wait {
+                    self.seconds_delay_after_typing = max_wait;
+                }
+                ui.add(
+                    egui::Slider::new(&mut self.seconds_delay_after_typing, 0.0..=max_wait)
+                        .text("Pause Zwischen Buchstaben (in Sekunden)"),
                 );
 
                 ui.add_space(20.0);
